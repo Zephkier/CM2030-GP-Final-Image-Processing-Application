@@ -3,13 +3,14 @@ let setWidth = 640 / 4; // minimum = 160
 let setHeight = 480 / 4; // minimum = 120
 let marginWidth = 20;
 let marginHeight = 40;
+let buttonMargin = marginHeight / 4;
 let positions = []; // positions to end up like this: [ [{x,y}, {x,y}, {x,y}], repeat 4 more times ]
 
-// Picture and video functionality
+// For picture-taking and resuming video
 let inputFeed;
 let pictureButton;
 let videoButton;
-let pictureTaken = false;
+let pictureTaken = false; // Simply for adjusting pictureButton's position
 
 // For captures
 let brightSlider;
@@ -26,17 +27,39 @@ let hueSlider;
 let satSlider;
 let valSlider;
 
+// For face detection
+let detector;
+
+let detectDefaultButton;
+let detectGreyButton;
+let detectBlurButton;
+let detectConvertButton;
+let detectPixelButton;
+let detectNegativeButton;
+
+let detectDefaultEffect = true; // Ensure 'Effect' variables are copy-pasted to setAllEffectsFalse()
+let detectGreyEffect = false;
+let detectBlurEffect = false;
+let detectConvertEffect = false;
+let detectPixelEffect = false;
+let detectNegativeEffect = false;
+
+let detectDefaultSlider;
+let detectBlurSlider;
+let detectPixelSlider;
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
-  textAlign(CENTER); // Ensure sliderAndTextAlignLeft() resets to this
-  fill(255); // Ensure hoverEffectAndText() resets to this
+  textAlign(CENTER);
+  fill(255);
+  noStroke();
 
   pixelDensity(1);
   capture = createCapture(VIDEO);
   capture.size(setWidth, setHeight);
   capture.hide();
 
-  // ----- Picture and video functionality  ----- //
+  // ----- For picture-taking and resuming video ----- //
   // Set inputFeed upon startup
   inputFeed = capture;
 
@@ -45,24 +68,24 @@ function setup() {
   videoButton = createButton("Resume video");
   videoButton.hide();
 
-  // Button function
+  // Button function (change inputFeed)
   pictureButton.mousePressed(function () {
     let picture = createImage(capture.width, capture.height);
     picture.copy(capture, 0, 0, capture.width, capture.height, 0, 0, capture.width, capture.height);
     inputFeed = picture;
     pictureButton.html("Take another!");
     videoButton.show();
-    pictureTaken = true;
+    pictureTaken = true; // Simply for adjusting pictureButton's position
   });
 
   videoButton.mousePressed(function () {
     inputFeed = capture;
     pictureButton.html("Take picture");
     videoButton.hide();
-    pictureTaken = false;
+    pictureTaken = false; // Simply for adjusting pictureButton's position
   });
 
-  // ----- For captures  ----- //
+  // ----- For captures ----- //
   brightSlider = createSlider(0, 300, 120, 1);
   redSlider = createSlider(0, 255, 255, 1);
   greenSlider = createSlider(0, 255, 255, 1);
@@ -82,19 +105,73 @@ function setup() {
   for (let i = 0; i < sliders.length; i++) {
     sliders[i].style("width", capture.width + "px"); // Set slider's width to be capture's width by default
   }
+
+  // ----- For face detection ----- //
+  let scaleFactor = 1.2;
+  let classifier = objectdetect.frontalface;
+  detector = new objectdetect.detector(setWidth, setHeight, scaleFactor, classifier);
+
+  // Button creation (tried using loop to createButton(), doesn't work)
+  detectDefaultButton = createButton("Default");
+  detectGreyButton = createButton("Greyscale");
+  detectBlurButton = createButton("Blur");
+  detectConvertButton = createButton("HSV Mode");
+  detectPixelButton = createButton("Pixelate");
+  detectNegativeButton = createButton("Negative");
+
+  // Button function
+  detectDefaultButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectDefaultEffect = true;
+  });
+
+  detectGreyButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectGreyEffect = true;
+  });
+
+  detectBlurButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectBlurEffect = true;
+  });
+
+  detectConvertButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectConvertEffect = true;
+  });
+
+  detectPixelButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectPixelEffect = true;
+  });
+
+  detectNegativeButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectNegativeEffect = true;
+  });
+
+  // Slider creation
+  detectDefaultSlider = createSlider(1, 10, 2, 1);
+  detectBlurSlider = createSlider(1, 30, 15, 1);
+  detectPixelSlider = createSlider(1, 20, 10, 1);
+
+  detectDefaultSlider.style("width", capture.width / 2 + "px");
+  detectBlurSlider.style("width", capture.width / 2 + "px");
+  detectPixelSlider.style("width", capture.width / 2 + "px");
 }
 
 function draw() {
   background(20);
 
-  // ----- Update positions in case of window resizing  ----- //
+  // ----- Update positions in case of window resizing ----- //
   let rowCount = 5;
   let colCount = 3;
   for (let i = 0; i < rowCount; i++) {
     positions[i] = [];
     for (let j = 0; j < colCount; j++) {
       let totalWidth = colCount * (setWidth + marginWidth) - marginWidth;
-      let totalHeight = rowCount * (setHeight + marginHeight) - marginHeight;
+      let extraHeight = detectDefaultButton.height * 3 + buttonMargin; // Any 3 buttons can be used + (buttonMargin)
+      let totalHeight = rowCount * (setHeight + marginHeight) - marginHeight + extraHeight;
       let startX = (width - totalWidth) / 2;
       let startY = (height - totalHeight) / 2;
       positions[i][j] = {
@@ -104,10 +181,12 @@ function draw() {
     }
   }
 
-  // Shift pictureButton leftward a tiny bit when its text changes
-  if (!pictureTaken) pictureButton.position(positions[0][2].x + capture.width / 2 - pictureButton.width / 2, positions[0][2].y);
-  else pictureButton.position(positions[0][2].x + capture.width / 2 - pictureButton.width / 2 - 4, positions[0][2].y);
-  videoButton.position(positions[0][2].x + capture.width / 2 - videoButton.width / 2, positions[0][2].y + pictureButton.height + marginHeight / 4);
+  // Button positions
+  let buttonPosX = positions[0][2].x + capture.width / 2;
+  let buttonPosY = positions[0][2].y;
+  if (!pictureTaken) pictureButton.position(buttonPosX - pictureButton.width / 2, buttonPosY);
+  else pictureButton.position(buttonPosX - pictureButton.width / 2 - 4, buttonPosY); // Move leftwards slightly due to longer button text
+  videoButton.position(buttonPosX - videoButton.width / 2, buttonPosY + pictureButton.height + buttonMargin);
 
   // ----- Capture grid ----- //
   // Row 1
@@ -118,7 +197,7 @@ function draw() {
   hoverEffectAndText(positions[0][1].x, positions[0][1].y, capture.width, capture.height, "Greyscale\nand\nBrightness at " + brightSlider.value() + "%", 2);
   sliderAndText(brightSlider, positions[0][1].x, positions[0][1].y, "Brightness", "%");
 
-  // Row 2 TODO: unsure if this is correct
+  // Row 2
   captureEditR(inputFeed, positions[1][0].x, positions[1][0].y, setWidth, setHeight);
   hoverEffectAndText(positions[1][0].x, positions[1][0].y, capture.width, capture.height, "Red Channel", 0);
   sliderAndText(redSlider, positions[1][0].x, positions[1][0].y, "Red Value");
@@ -131,7 +210,7 @@ function draw() {
   hoverEffectAndText(positions[1][2].x, positions[1][2].y, capture.width, capture.height, "Blue Channel", 0);
   sliderAndText(blueSlider, positions[1][2].x, positions[1][2].y, "Blue Value");
 
-  // Row 3 TODO: unsure if this is correct
+  // Row 3
   captureEditSegment1(inputFeed, positions[2][0].x, positions[2][0].y, setWidth, setHeight);
   hoverEffectAndText(positions[2][0].x, positions[2][0].y, capture.width, capture.height, "Segmented Image", 0);
   sliderAndText(redRemovedSlider, positions[2][0].x, positions[2][0].y, "Red Removed");
@@ -144,7 +223,7 @@ function draw() {
   hoverEffectAndText(positions[2][2].x, positions[2][2].y, capture.width, capture.height, "Segmented Image", 0);
   sliderAndText(blueRemovedSlider, positions[2][2].x, positions[2][2].y, "Blue Removed");
 
-  // Row 4 TODO: unsure if this is correct
+  // Row 4
   captureEditRepeat(inputFeed, positions[3][0].x, positions[3][0].y, setWidth, setHeight);
   hoverEffectAndText(positions[3][0].x, positions[3][0].y, capture.width, capture.height, "Webcam\nImage\n\n(Repeat)", 3);
 
@@ -154,9 +233,21 @@ function draw() {
   captureEditColourSpace2(inputFeed, positions[3][2].x, positions[3][2].y, setWidth, setHeight);
   hoverEffectAndText(positions[3][2].x, positions[3][2].y, capture.width, capture.height, "Colour Space\n(Conversion)\n2\n\nRGB to HSV", 4);
 
-  // Row 5 TODO: very unsure if this is correct
+  // Row 5
   captureEditFaceDetect(inputFeed, positions[4][0].x, positions[4][0].y, setWidth, setHeight);
   hoverEffectAndText(positions[4][0].x, positions[4][0].y, capture.width, capture.height, "Face Detection\nand\nReplaced\nFace Images", 3);
+  // Sliders
+  sliderAndTextBeside(detectDefaultSlider, positions[4][0].x, positions[4][0].y, "Box thickness", "px");
+  sliderAndTextBeside(detectBlurSlider, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 2.5, "Blur", "x");
+  sliderAndTextBeside(detectPixelSlider, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 2.5 + detectBlurSlider.height * 2.5, "Pixel", "px");
+  // Left side buttons
+  detectDefaultButton.position(positions[4][0].x, positions[4][0].y + inputFeed.height + buttonMargin);
+  detectGreyButton.position(positions[4][0].x, detectDefaultButton.y + detectDefaultButton.height);
+  detectBlurButton.position(positions[4][0].x, detectGreyButton.y + detectGreyButton.height);
+  // Right side buttons
+  detectConvertButton.position(positions[4][0].x + inputFeed.width - detectConvertButton.width, positions[4][0].y + inputFeed.height + buttonMargin);
+  detectPixelButton.position(positions[4][0].x + inputFeed.width - detectPixelButton.width, detectConvertButton.y + detectConvertButton.height);
+  detectNegativeButton.position(positions[4][0].x + inputFeed.width - detectNegativeButton.width, detectPixelButton.y + detectPixelButton.height);
 
   captureEditColourSpace1Segment(inputFeed, positions[4][1].x, positions[4][1].y, setWidth, setHeight);
   hoverEffectAndText(positions[4][1].x, positions[4][1].y, capture.width, capture.height, "Segmented Image\nfrom\nColour Space\n(Conversion)\n1", 4);
@@ -232,7 +323,7 @@ function sliderAndTextAlignLeft(incomingSlider, sliderWidth, inputFeedX, inputFe
     inputFeedX,
     inputFeedY + inputFeed.height + incomingSlider.height
   );
-  textAlign(CENTER); // reset to default
+  textAlign(CENTER); // Reset to default
 
   // Slider (based on inputFeed's dimensions)
   incomingSlider.position(
@@ -241,6 +332,34 @@ function sliderAndTextAlignLeft(incomingSlider, sliderWidth, inputFeedX, inputFe
     inputFeedY + inputFeed.height + textSize() / 8 // NOTE: added "+ textSize() / 8" to centralise a tiny bit
   );
   incomingSlider.style("width", inputFeed.width - sliderWidth + "px");
+}
+
+function sliderAndTextBeside(incomingSlider, inputFeedX, inputFeedY, string, stringSuffix = "") {
+  // Text (based on inputFeed's dimensions)
+  textAlign(RIGHT);
+  text(
+    // format
+    string + ": " + incomingSlider.value() + stringSuffix,
+    inputFeedX - textSize() / 2,
+    inputFeedY + textSize()
+  );
+  textAlign(CENTER); // Reset to default
+
+  // Slider (based on inputFeed's dimensions)
+  incomingSlider.position(
+    // format
+    inputFeedX - incomingSlider.width - textSize() / 2,
+    inputFeedY + textSize()
+  );
+}
+
+function setAllEffectsFalse() {
+  detectDefaultEffect = false;
+  detectGreyEffect = false;
+  detectBlurEffect = false;
+  detectConvertEffect = false;
+  detectPixelEffect = false;
+  detectNegativeEffect = false;
 }
 
 /*
@@ -436,7 +555,17 @@ function captureEditColourSpace1(src, x, y, w, h) {
   image(captureCopy, x, y, w, h);
 }
 
-// TODO: choose one formula to use. once done, ensure captureEditColourSpace2Segment() below uses the same
+/*
+TODO
+===== ===== ===== ===== =====
+choose one formula to use
+
+then, ensure the following function uses the same one, as it is copy-pasted from here to there:
+- captureEditColourSpace2Segment()
+- faceDetectEdit()'s 'detectConvertEffect'
+
+then refactor so it can easily be re-used
+*/
 function captureEditColourSpace2(src, x, y, w, h) {
   let captureCopy = createImage(setWidth, setHeight);
   captureCopy.copy(src, 0, 0, setWidth, setHeight, 0, 0, setWidth, setHeight);
@@ -509,28 +638,174 @@ function captureEditColourSpace2(src, x, y, w, h) {
 }
 
 // Row 5
-// TEST
 function captureEditFaceDetect(src, x, y, w, h) {
+  // Display captureCopy
   let captureCopy = createImage(setWidth, setHeight);
   captureCopy.copy(src, 0, 0, setWidth, setHeight, 0, 0, setWidth, setHeight);
+  image(captureCopy, x, y, w, h);
   captureCopy.loadPixels();
-  for (let x = 0; x < captureCopy.width; x++) {
-    for (let y = 0; y < captureCopy.height; y++) {
-      let index = (captureCopy.width * y + x) * 4;
-      let chanR = captureCopy.pixels[index + 0];
-      let chanG = captureCopy.pixels[index + 1];
-      let chanB = captureCopy.pixels[index + 2];
-      let chanA = captureCopy.pixels[index + 3];
-      captureCopy.pixels[index + 0] = chanR;
-      captureCopy.pixels[index + 1] = chanG;
-      captureCopy.pixels[index + 2] = chanB;
+
+  // Detect face
+  let faces = detector.detect(captureCopy.canvas);
+  for (let i = 0; i < faces.length; i++) {
+    let face = faces[i];
+    if (face[4] > 4) {
+      // Create effects
+      faceDetectEdit(captureCopy, int(face[0]), int(face[1]), int(face[2]), int(face[3]), x, y);
+
+      // If default effect, then do not draw this as white rect will be drawn BELOW updated image()
+      if (!detectDefaultEffect) {
+        captureCopy.updatePixels();
+        image(captureCopy, x, y, w, h);
+      }
     }
   }
-  captureCopy.updatePixels();
-  image(captureCopy, x, y, w, h);
 }
 
-// Copy-pasted from captureEditColourSpace1() above
+function faceDetectEdit(src, faceX, faceY, faceWidth, faceHeight, translateX, translateY) {
+  for (let x = faceX; x < faceX + faceWidth; x++) {
+    for (let y = faceY; y < faceY + faceHeight; y++) {
+      let index = (src.width * y + x) * 4;
+      let chanR = src.pixels[index + 0];
+      let chanG = src.pixels[index + 1];
+      let chanB = src.pixels[index + 2];
+      switch (true) {
+        default: // this is detectDefaultEffect
+          push();
+          translate(translateX, translateY);
+          // Setup
+          noFill();
+          stroke(255);
+          strokeWeight(detectDefaultSlider.value());
+          // Draw box
+          rect(faceX, faceY, faceWidth, faceHeight);
+          pop();
+          // Reset to default
+          fill(255);
+          noStroke();
+          break;
+        case detectGreyEffect:
+          let grey = (chanR + chanG + chanB) / 3;
+          src.pixels[index + 0] = grey;
+          src.pixels[index + 1] = grey;
+          src.pixels[index + 2] = grey;
+          break;
+        case detectBlurEffect:
+          let myMatrix = createBlurMatrix(detectBlurSlider.value());
+          let myConv = convolution(x, y, myMatrix, src);
+          src.pixels[index + 0] = myConv[0];
+          src.pixels[index + 1] = myConv[1];
+          src.pixels[index + 2] = myConv[2];
+          break;
+        case detectConvertEffect:
+          let myValueMax = max(chanR, chanG, chanB);
+          let myValueMin = min(chanR, chanG, chanB);
+          let mySaturation;
+          if (myValueMax == 0 || myValueMin == 0) mySaturation = 0;
+          else mySaturation = (myValueMax - myValueMin) / myValueMax;
+          let myHue;
+          if (myValueMax == chanR) myHue = 60 * ((0 + (chanG - chanB)) / (myValueMax - myValueMin));
+          else if (myValueMax == chanG) myHue = 60 * ((2 + (chanB - chanR)) / (myValueMax - myValueMin));
+          else if (myValueMax == chanB) myHue = 60 * ((4 + (chanR - chanG)) / (myValueMax - myValueMin));
+          if (myHue < 0) myHue += 360;
+          src.pixels[index + 0] = map(myHue, 0, 360, 0, 255);
+          src.pixels[index + 1] = map(mySaturation, 0, 1, 0, 255);
+          src.pixels[index + 2] = map(myValueMax, 0, 1, 0, 255);
+          break;
+        case detectPixelEffect:
+          createPixelEffect(detectPixelSlider.value(), src, faceX, faceY, faceWidth, faceHeight);
+          break;
+        case detectNegativeEffect:
+          src.pixels[index + 0] = map(chanR, 0, 255, 255, 0);
+          src.pixels[index + 1] = map(chanG, 0, 255, 255, 0);
+          src.pixels[index + 2] = map(chanB, 0, 255, 255, 0);
+          break;
+      }
+    }
+  }
+}
+
+// faceDetectEdit()'s detectBlurEffect's helper functions
+function createBlurMatrix(matrixSize) {
+  let totalElements = matrixSize * matrixSize;
+  let matrix = [];
+
+  for (let i = 0; i < matrixSize; i++) {
+    matrix[i] = [];
+    for (let j = 0; j < matrixSize; j++) {
+      matrix[i].push(1 / totalElements);
+    }
+  }
+
+  return matrix;
+}
+
+function convolution(x, y, matrix, src) {
+  let matrixSize = matrix.length;
+  let totalR = 0.0;
+  let totalG = 0.0;
+  let totalB = 0.0;
+  let offset = floor(matrixSize / 2);
+
+  for (let i = 0; i < matrixSize; i++) {
+    for (let j = 0; j < matrixSize; j++) {
+      // Get pixel loc within convolution matrix
+      let xLoc = x + i - offset;
+      let yLoc = y + j - offset;
+      let index = (xLoc + src.width * yLoc) * 4;
+      index = constrain(index, 0, src.pixels.length - 1);
+      totalR += src.pixels[index + 0] * matrix[i][j];
+      totalG += src.pixels[index + 1] * matrix[i][j];
+      totalB += src.pixels[index + 2] * matrix[i][j];
+    }
+  }
+
+  return [totalR, totalG, totalB];
+}
+
+// faceDetectEdit()'s detectPixelEffect's helper functions
+function createPixelEffect(pixelSize, src, faceX, faceY, faceWidth, faceHeight) {
+  // Within face detected area...
+  for (let x = faceX; x < faceX + faceWidth; x += pixelSize) {
+    for (let y = faceY; y < faceY + faceHeight; y += pixelSize) {
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      // Within every block of pixelSize...
+      for (let i = 0; i < pixelSize; i++) {
+        for (let j = 0; j < pixelSize; j++) {
+          let index = (src.width * (y + j) + (x + i)) * 4;
+          let chanR = src.pixels[index + 0];
+          let chanG = src.pixels[index + 1];
+          let chanB = src.pixels[index + 2];
+          // Get sum of RGB values in the size of pixelSize
+          sumR += chanR;
+          sumG += chanG;
+          sumB += chanB;
+        }
+      }
+
+      // Get average RGB values in every pixelSize block
+      let pixelArea = pixelSize * pixelSize;
+      let avgR = sumR / pixelArea;
+      let avgG = sumG / pixelArea;
+      let avgB = sumB / pixelArea;
+
+      // Within every block of pixelSize...
+      for (let i = 0; i < pixelSize; i++) {
+        for (let j = 0; j < pixelSize; j++) {
+          let index = (src.width * (y + j) + (x + i)) * 4;
+          // Apply average RGB values to the corresponding RGB channels
+          src.pixels[index + 0] = avgR;
+          src.pixels[index + 1] = avgG;
+          src.pixels[index + 2] = avgB;
+        }
+      }
+    }
+  }
+}
+
+// TODO: Refactor instead of copy-pasting from captureEditColourSpace1() above
 function captureEditColourSpace1Segment(src, x, y, w, h) {
   let captureCopy = createImage(setWidth, setHeight);
   captureCopy.copy(src, 0, 0, setWidth, setHeight, 0, 0, setWidth, setHeight);
@@ -557,8 +832,8 @@ function captureEditColourSpace1Segment(src, x, y, w, h) {
   image(captureCopy, x, y, w, h);
 }
 
-// TODO: unsure if slider value is applied correctly (eg. should i "+ hueSlider.value()" instead?)
-// Copy-pasted from captureEditColourSpace2() above
+// FIXME: unsure if slider value is applied correctly (eg. should i "+ hueSlider.value()" instead?)
+// TODO: Refactor instead of copy-pasting from captureEditColourSpace2() above
 function captureEditColourSpace2Segment(src, x, y, w, h) {
   let captureCopy = createImage(setWidth, setHeight);
   captureCopy.copy(src, 0, 0, setWidth, setHeight, 0, 0, setWidth, setHeight);
