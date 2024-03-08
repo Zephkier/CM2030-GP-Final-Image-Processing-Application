@@ -1,30 +1,130 @@
-// General
+/*
+GP Final - Submission Commentary Report
+497 out of 500 words
+
+=========================
+(98 words) What problems have you faced and were you able to solve them?
+=========================
+Initially, due to a lack of understanding in using captures, the 'image()' function, and
+moving copies around, I spent a lot of time doing trial and error to grasp a better
+concept - and got better over time.
+
+The next hurdle was tackling the application’s presentation, and the capture’s
+repetitive code.
+
+As there are 14 different captures, I needed a simpler way to reference each of their
+positions, which led to the creation of the 2-Dimensional 'positions' array.
+
+Then, I needed a standardised way to create all of the captures, which led to the
+creation of the 'captureEdit...()' function.
+
+=========================
+(44 words) Were you on target to successfully complete your project? If not, how would
+you address the issue/s and do things differently?
+=========================
+Along the process, I created helper functions, such as easily drawing text and sliders
+before the capture, to improve productivity.
+
+With that, apart from researching colour space conversion formulas and some of the face
+detection effects, I was on target to finish the project.
+
+=========================
+(83 words) Also discuss your extension and why it is a unique idea.
+=========================
+Once every capture and their effects were successfully implemented, I worked on some
+extensions, specifically, the canvas' top-right corner.
+
+This includes:
+- Saving the entire canvas with an adjustable timer.
+- Creating a hover effect over each capture.
+- Changing the capture’s input via a freeze frame or preloaded image.
+
+My unique method of saving the canvas includes decluttering the screen of any text and
+HTML elements, and centralising the overall captures. Additionally, the hover effect is
+great as it informs the user regarding each capture.
+
+=========================
+(272 words) Discuss your findings e.g. image thresholding using each colour channel
+=========================
+8. What can you say about the result of thresholding for each channel - is it different
+and why?
+-------------------------
+Yes, thresholding each channel gives different outputs. To explain clearly, say there is
+a pixel with RGB(200, 100, 50) values.
+
+Like in row 2 of my application, when converting that pixel to show the red channel only,
+it becomes RGB(200, 0, 0). Likewise, for the blue-only and green-only captures, it
+becomes RGB(0, 100, 0) and RGB(0, 0, 50) respectively.
+
+The threshold causes the pixel value to either become black, RGB(0), or its brightest
+colour in the corresponding capture it belongs to; if red-only, then RGB(255, 0, 0).
+
+Thus, when applying a threshold value of, say 150, the pixel in the red-only capture
+becomes RGB(0), while the same pixel in the blue-only and green-only captures remain the
+same - and that is when the differences start to show.
+
+-------------------------
+11. What can you say about the thresholding results above when compared to step 7
+i.e. is the thresholded image noisier etc? Can you use a different colour space to
+improve results?
+-------------------------
+The thresholding concept remains the same in both my CMY and HSV captures.
+
+In the CMY colour space, as I change the threshold’s value, the effects are very similar
+to the RGB colour space.
+
+However, in the HSV colour space, both the original image and thresholded image are much
+noisier. This could be due to how HSV’s colour calculations are conceptually and entirely
+different from both RGB and CMY. For example, HSV uses angles to select hues, while RGB
+and CMY simply adjusts all of its channels to select hues.
+
+This means that the current thresholding method used in the HSV colour space is
+inappropriate, while the same thresholding method for the RGB and CMY colour spaces are
+fine.
+
+Finally, a different colour space can indeed be used, such as CMY. Both colour spaces are
+demonstrated in my application.
+
+-------------------------
+*/
+
+// ----- General and others ----- //
+
 let capture;
 let setWidth = 160; // This is the minimum, original = 640
 let setHeight = 120; // This is the minimum, original = 480
 let marginWidth = 20; // Recommended minimum = 20
 let marginHeight = 60; // Recommended minimum = 60 for 1080p screen
+let buttonMargin = 0; // Uses HTML element's value
 let positions = []; // 'positions' to end up like this: [ [{x,y}, {x,y}, {x,y}], repeat 4 more times ]
-let hoverToggleButton;
-let hoverEffectIsOn = true;
+let buttons = [];
+let sliders = [];
+let buttonsAndSliders = [];
 
-// For exporting
-let backgroundColour = 20;
+// ----- Canvas' top-right corner's empty space ----- //
+
+// Export-related
+let backgroundColour;
 let exportButton;
 let exportDelaySlider;
 let exportDelay;
 let exportingNow = false;
-let allButtonsAndSliders;
 
-// For changing inputFeed (aka. (un)freezing frame, using image)
+// Hover effect
+let hoverToggleButton;
+let hoverEffectIsOn = true;
+
+// Changing inputFeed between capture, frozen capture, and image
 let inputFeed;
 let freezeButton;
 let unfreezeButton;
-let incomingImage;
 let switchToImageButton;
+let myImage;
 let showUnfreezeButton = false;
 
-// For captures
+// ----- Capture grid ----- //
+
+// Sliders
 let brightSlider;
 let redSlider;
 let greenSlider;
@@ -41,13 +141,13 @@ let valSlider;
 let cyanThresholdSlider;
 let hueThresholdSlider;
 
-// For threshold
+// Buttons
 let thresholdToggleBlackButton;
 let thresholdShowPureBlack = true;
 let thresholdToggleWhiteButton;
 let thresholdToWhite = false;
 
-// For face detection
+// Face detection items
 let detector;
 
 let detectDefaultButton;
@@ -57,291 +157,82 @@ let detectConvertButton;
 let detectPixelButton;
 let detectNegativeButton;
 
-let detectDefaultEffect = true; // Ensure 'Effect' variables are copy-pasted to setAllEffectsFalse()
+let detectDefaultSlider;
+let detectBlurSlider;
+let detectPixelSlider;
+
+// Ensure these are copy-pasted into setAllEffectsFalse()
+let detectDefaultEffect = true;
 let detectGreyEffect = false;
 let detectBlurEffect = false;
 let detectConvertEffect = false;
 let detectPixelEffect = false;
 let detectNegativeEffect = false;
 
-let detectDefaultSlider;
-let detectBlurSlider;
-let detectPixelSlider;
+// ----- Main ----- //
 
+// p5js functions
 function preload() {
-  incomingImage = loadImage("test0.png");
+  myImage = loadImage("test0.png");
 }
 
 function setup() {
-  // ----- General ----- //
+  // General
   createCanvas(windowWidth, windowHeight);
   textAlign(CENTER);
-
   pixelDensity(1);
   capture = createCapture(VIDEO);
   capture.size(setWidth, setHeight);
   capture.hide();
 
-  hoverToggleButton = createButton("Toggle Cursor Hover<br>On"); // Use "<br>" instead of "\n"
-  hoverToggleButton.mousePressed(function () {
-    hoverEffectIsOn = !hoverEffectIsOn;
-    if (hoverEffectIsOn) hoverToggleButton.html("Toggle Cursor Hover<br>On");
-    else hoverToggleButton.html("Toggle Cursor Hover<br>Off");
-  });
-
-  // ----- For exporting ----- //
-  exportButton = createButton("Export Canvas");
-  exportButton.mousePressed(function () {
-    exportDelay = exportDelaySlider.value() * 1000; // 1000 = 1 second
-    exportingNow = true;
-    setTimeout(function () {
-      saveCanvas("My p5.js Photo Booth", "png");
-      exportingNow = false;
-    }, exportDelay);
-  });
-
-  exportDelaySlider = createSlider(0, 10, 3, 1);
-  exportDelaySlider.style("width", capture.width + "px");
-
-  // ----- For (un)freezing frame ----- //
-  // Set inputFeed upon startup
-  inputFeed = capture;
-
-  // Button
-  freezeButton = createButton("Freeze frame");
-  unfreezeButton = createButton("Unfreeze frame").hide();
-  switchToImageButton = createButton("Switch to<br>Preloaded Image");
-
-  freezeButton.mousePressed(function () {
-    let picture = createImage(capture.width, capture.height);
-    picture.copy(capture, 0, 0, capture.width, capture.height, 0, 0, capture.width, capture.height);
-    inputFeed = picture;
-    freezeButton.html("Freeze again!");
-    showUnfreezeButton = true;
-  });
-
-  unfreezeButton.mousePressed(function () {
-    inputFeed = capture;
-    freezeButton.html("Freeze frame");
-    showUnfreezeButton = false;
-  });
-
-  switchToImageButton.mousePressed(function () {
-    let incomingImageCopy = createImage(capture.width, capture.height);
-    incomingImageCopy.copy(incomingImage, 0, 0, incomingImage.width, incomingImage.height, 0, 0, capture.width, capture.height);
-    inputFeed = incomingImageCopy;
-    showUnfreezeButton = true;
-  });
-
-  // ----- For captures ----- //
-  brightSlider = createSlider(0, 300, 120, 1);
-  redSlider = createSlider(0, 255, 255, 1);
-  greenSlider = createSlider(0, 255, 255, 1);
-  blueSlider = createSlider(0, 255, 255, 1);
-  redThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
-  greenThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
-  blueThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
-  cyanSlider = createSlider(0, 100, 100, 1);
-  magentaSlider = createSlider(0, 100, 100, 1);
-  yellowSlider = createSlider(0, 100, 100, 1);
-  hueSlider = createSlider(0, 360, 360, 1);
-  satSlider = createSlider(0, 100, 100, 1);
-  valSlider = createSlider(0, 100, 100, 1);
-  cyanThresholdSlider = createSlider(0, 100, 66, 1);
-  hueThresholdSlider = createSlider(0, 360, 180, 1);
-
-  let sliders = [];
-  sliders.push(brightSlider, redSlider, greenSlider, blueSlider, redThresholdSlider, greenThresholdSlider, blueThresholdSlider, cyanSlider, magentaSlider, yellowSlider, hueSlider, satSlider, valSlider, cyanThresholdSlider, hueThresholdSlider);
-  for (let i = 0; i < sliders.length; i++) {
-    sliders[i].style("width", capture.width + "px"); // Set slider's width to be capture's width by default
-  }
-
-  // ----- For threshold ----- //
-  thresholdToggleBlackButton = createButton("See Pure Black<br>On"); // Use "<br>" instead of "\n"
-  thresholdToggleBlackButton.mousePressed(function () {
-    thresholdShowPureBlack = !thresholdShowPureBlack;
-    if (thresholdShowPureBlack) thresholdToggleBlackButton.html("See Pure Black<br>On");
-    else thresholdToggleBlackButton.html("See Pure Black<br>Off");
-  });
-
-  thresholdToggleWhiteButton = createButton("Threshold to White<br>Off"); // Use "<br>" instead of "\n"
-  thresholdToggleWhiteButton.mousePressed(function () {
-    thresholdToWhite = !thresholdToWhite;
-    if (thresholdToWhite) thresholdToggleWhiteButton.html("Threshold to White<br>On");
-    else thresholdToggleWhiteButton.html("Threshold to White<br>Off");
-  });
-
-  // ----- For face detection ----- //
+  // Face detection
   let scaleFactor = 1.2;
   let classifier = objectdetect.frontalface;
   detector = new objectdetect.detector(setWidth, setHeight, scaleFactor, classifier);
 
-  // Button
-  detectDefaultButton = createButton("Default"); // Tried using a loop to createButton() to simplify; doesn't work
-  detectGreyButton = createButton("Greyscale");
-  detectBlurButton = createButton("Blur");
-  detectConvertButton = createButton("HSV Mode");
-  detectPixelButton = createButton("Pixelate");
-  detectNegativeButton = createButton("Negative");
+  // Canvas' top-right corner's empty space
+  inputFeed = capture;
+  setupTopRightCornerItems();
 
-  detectDefaultButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectDefaultEffect = true;
-  });
+  // Capture grid
+  setupCaptureGridButtons();
+  setupCaptureGridSliders();
 
-  detectGreyButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectGreyEffect = true;
-  });
+  // Set slider's width to capture's width by default
+  for (let i = 0; i < sliders.length; i++) {
+    sliders[i].style("width", capture.width + "px");
+  }
 
-  detectBlurButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectBlurEffect = true;
-  });
-
-  detectConvertButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectConvertEffect = true;
-  });
-
-  detectPixelButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectPixelEffect = true;
-  });
-
-  detectNegativeButton.mousePressed(function () {
-    setAllEffectsFalse();
-    detectNegativeEffect = true;
-  });
-
-  // Slider
-  detectDefaultSlider = createSlider(1, 10, 2, 1);
-  detectBlurSlider = createSlider(1, 30, 15, 1);
-  detectPixelSlider = createSlider(1, 20, 10, 1);
-
-  detectDefaultSlider.style("width", capture.width + "px");
-  detectBlurSlider.style("width", capture.width + "px");
-  detectPixelSlider.style("width", capture.width + "px");
-
-  // ----- For exporting: update this important array at the end (note that unfreezeButton is not inside) ----- //
-  allButtonsAndSliders = [hoverToggleButton, exportButton, exportDelaySlider, freezeButton, unfreezeButton, switchToImageButton, brightSlider, redSlider, greenSlider, blueSlider, redThresholdSlider, greenThresholdSlider, blueThresholdSlider, cyanSlider, magentaSlider, yellowSlider, hueSlider, satSlider, valSlider, cyanThresholdSlider, hueThresholdSlider, thresholdToggleBlackButton, thresholdToggleWhiteButton, detectDefaultButton, detectGreyButton, detectBlurButton, detectConvertButton, detectPixelButton, detectNegativeButton, detectDefaultSlider, detectBlurSlider, detectPixelSlider];
+  // When exporting, hide all HTML elements (done in draw())
+  buttonsAndSliders = buttons.concat(sliders);
 }
 
 function draw() {
+  // When exporting, set p5js' text colour to backgroundColour
+  backgroundColour = 20;
   background(backgroundColour);
   fill(255);
   noStroke();
 
-  // ----- Update positions in case of window resizing ----- //
-  let rowCount = 5;
-  let colCount = 3;
-  for (let i = 0; i < rowCount; i++) {
-    positions[i] = [];
-    for (let j = 0; j < colCount; j++) {
-      let totalWidth = colCount * (setWidth + marginWidth) - marginWidth;
-      let extraHeight = exportingNow ? 0 : (detectDefaultSlider.height + detectDefaultSlider.height / 8) * 3; // This is the extra height taken up below captureEditFaceDetect()
-      let totalHeight = rowCount * (setHeight + marginHeight) - marginHeight + extraHeight;
-      let startX = (width - totalWidth) / 2;
-      let startY = (height - totalHeight) / 2;
-      positions[i][j] = {
-        x: startX + j * (setWidth + marginWidth),
-        y: startY + i * (setHeight + marginHeight),
-      };
-    }
-  }
+  // Update positions in case of window resizing
+  getCaptureGridPosition();
 
-  // ----- At empty space in top-right corner of capture grid ----- //
-  let buttonMargin = exportButton.height / 2;
-  exportButton.position(positions[0][2].x, positions[0][2].y);
-  textAndSliderBottomLeft(exportDelaySlider, inputFeed.width * 0.45, exportButton.x, exportButton.y - inputFeed.height + exportButton.height + buttonMargin, "Export delay\n", " sec");
-  hoverToggleButton.position(exportButton.x, exportDelaySlider.y + buttonMargin * 3.5);
-  switchToImageButton.position(hoverToggleButton.x + hoverToggleButton.width + buttonMargin, hoverToggleButton.y);
-  freezeButton.position(exportButton.x, hoverToggleButton.y + hoverToggleButton.height + buttonMargin);
-  unfreezeButton.position(exportButton.x + freezeButton.width + buttonMargin, hoverToggleButton.y + hoverToggleButton.height + buttonMargin);
+  // Canvas' top-right corner's empty space
+  buttonMargin = exportButton.height / 2;
+  drawTopRightCornerItems();
+
+  // Capture grid
+  drawCaptureGrid();
+  drawCaptureGridItems();
+  if (hoverEffectIsOn) drawCaptureGridHoverEffect();
 
   // When exporting, hide all HTML elements
-  for (let i = 0; i < allButtonsAndSliders.length; i++) {
-    exportingNow ? allButtonsAndSliders[i].hide() : allButtonsAndSliders[i].show();
-  }
-
-  // Must be below 'for' loop above
-  showUnfreezeButton && !exportingNow ? unfreezeButton.show() : unfreezeButton.hide();
-
-  // ----- Capture grid itself ----- //
-  // Row 1
-  image(inputFeed, positions[0][0].x, positions[0][0].y, setWidth, setHeight);
-  captureEditGrey(inputFeed, positions[0][1].x, positions[0][1].y, setWidth, setHeight);
-  // Row 2
-  captureEditR(inputFeed, positions[1][0].x, positions[1][0].y, setWidth, setHeight);
-  captureEditG(inputFeed, positions[1][1].x, positions[1][1].y, setWidth, setHeight);
-  captureEditB(inputFeed, positions[1][2].x, positions[1][2].y, setWidth, setHeight);
-  // Row 3
-  captureEditThresholdR(inputFeed, positions[2][0].x, positions[2][0].y, setWidth, setHeight);
-  captureEditThresholdG(inputFeed, positions[2][1].x, positions[2][1].y, setWidth, setHeight);
-  captureEditThresholdB(inputFeed, positions[2][2].x, positions[2][2].y, setWidth, setHeight);
-  // Row 4
-  captureEditRepeat(inputFeed, positions[3][0].x, positions[3][0].y, setWidth, setHeight);
-  captureEditColourSpace1(inputFeed, positions[3][1].x, positions[3][1].y, setWidth, setHeight);
-  captureEditColourSpace2(inputFeed, positions[3][2].x, positions[3][2].y, setWidth, setHeight);
-  // Row 5
-  captureEditFaceDetect(inputFeed, positions[4][0].x, positions[4][0].y, setWidth, setHeight);
-  captureEditColourSpace1Threshold(inputFeed, positions[4][1].x, positions[4][1].y, setWidth, setHeight);
-  captureEditColourSpace2Threshold(inputFeed, positions[4][2].x, positions[4][2].y, setWidth, setHeight);
-
-  // ----- Capture grid's buttons and sliders ----- //
-  // Row 1
-  textAndSliderBottomCenter(brightSlider, positions[0][1].x, positions[0][1].y, "Brightness: ", "%");
-  // Row 2
-  textAndSliderBottomCenter(redSlider, positions[1][0].x, positions[1][0].y, "Red Value: ");
-  textAndSliderBottomCenter(greenSlider, positions[1][1].x, positions[1][1].y, "Green Value: ");
-  textAndSliderBottomCenter(blueSlider, positions[1][2].x, positions[1][2].y, "Blue Value: ");
-  // Row 3
-  thresholdToggleBlackButton.position(positions[2][0].x - thresholdToggleBlackButton.width - buttonMargin, positions[2][0].y);
-  thresholdToggleWhiteButton.position(positions[2][0].x - thresholdToggleWhiteButton.width - buttonMargin, positions[2][0].y + thresholdToggleBlackButton.height + buttonMargin);
-  textAndSliderBottomCenter(redThresholdSlider, positions[2][0].x, positions[2][0].y, "Red Threshold: ");
-  textAndSliderBottomCenter(greenThresholdSlider, positions[2][1].x, positions[2][1].y, "Green Threshold: ");
-  textAndSliderBottomCenter(blueThresholdSlider, positions[2][2].x, positions[2][2].y, "Blue Threshold: ");
-  // Row 4
-  textAndSliderBottomLeft(cyanSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y, "Cyan: ", "%");
-  textAndSliderBottomLeft(magentaSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y + cyanSlider.height * 1.2, "Magenta: ", "%");
-  textAndSliderBottomLeft(yellowSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y + cyanSlider.height * 1.2 + magentaSlider.height * 1.2, "Yellow: ", "%");
-  textAndSliderBottomLeft(hueSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y, "Hue: ", "°");
-  textAndSliderBottomLeft(satSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y + hueSlider.height * 1.2, "Sat.: ", "%");
-  textAndSliderBottomLeft(valSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y + hueSlider.height * 1.2 + satSlider.height * 1.2, "Value: ", "%");
-  // Row 5, beside capture left
-  for (let i = 0; i < 6; i++) {
-    text(i + 1, positions[4][0].x - marginWidth, positions[4][0].y + buttonMargin * 1.5 + i * (detectDefaultButton.height + buttonMargin));
-  }
-  detectDefaultButton.position(positions[4][0].x - detectDefaultButton.width - buttonMargin * 2.5, positions[4][0].y);
-  detectGreyButton.position(positions[4][0].x - detectGreyButton.width - buttonMargin * 2.5, detectDefaultButton.y + detectDefaultButton.height + buttonMargin);
-  detectBlurButton.position(positions[4][0].x - detectBlurButton.width - buttonMargin * 2.5, detectGreyButton.y + detectGreyButton.height + buttonMargin);
-  detectConvertButton.position(positions[4][0].x - detectConvertButton.width - buttonMargin * 2.5, detectBlurButton.y + detectBlurButton.height + buttonMargin);
-  detectPixelButton.position(positions[4][0].x - detectPixelButton.width - buttonMargin * 2.5, detectConvertButton.y + detectConvertButton.height + buttonMargin);
-  detectNegativeButton.position(positions[4][0].x - detectNegativeButton.width - buttonMargin * 2.5, detectPixelButton.y + detectPixelButton.height + buttonMargin);
-  // Row 5, below capture left
-  textAndSliderBottomLeft(detectDefaultSlider, inputFeed.width * 0.7, positions[4][0].x, positions[4][0].y, "Box thickness: ", "px");
-  textAndSliderBottomLeft(detectBlurSlider, inputFeed.width * 0.4, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 1.2, "Blur: ", "x");
-  textAndSliderBottomLeft(detectPixelSlider, inputFeed.width * 0.4, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 1.2 + detectBlurSlider.height * 1.2, "Pixel: ", "px");
-  // Row 5, below capture middle and right
-  textAndSliderBottomCenter(cyanThresholdSlider, positions[4][1].x, positions[4][1].y, "C Threshold: ", "%");
-  textAndSliderBottomCenter(hueThresholdSlider, positions[4][2].x, positions[4][2].y, "H Threshold: ", "%");
-
-  // ----- Capture grid hover effect ----- //
-  if (hoverEffectIsOn) {
-    hoverEffect(positions[0][0].x, positions[0][0].y, capture.width, capture.height, "Webcam\nImage", 1);
-    hoverEffect(positions[0][1].x, positions[0][1].y, capture.width, capture.height, "Greyscale\nand\nBrightness at " + brightSlider.value() + "%", 2);
-    hoverEffect(positions[1][0].x, positions[1][0].y, capture.width, capture.height, "Red Channel", 0);
-    hoverEffect(positions[1][1].x, positions[1][1].y, capture.width, capture.height, "Green Channel", 0);
-    hoverEffect(positions[1][2].x, positions[1][2].y, capture.width, capture.height, "Blue Channel", 0);
-    hoverEffect(positions[2][0].x, positions[2][0].y, capture.width, capture.height, "Threshold\nImage", 1);
-    hoverEffect(positions[2][1].x, positions[2][1].y, capture.width, capture.height, "Threshold\nImage", 1);
-    hoverEffect(positions[2][2].x, positions[2][2].y, capture.width, capture.height, "Threshold\nImage", 1);
-    hoverEffect(positions[3][0].x, positions[3][0].y, capture.width, capture.height, "Webcam\nImage\n\n(Repeat)", 3);
-    hoverEffect(positions[3][1].x, positions[3][1].y, capture.width, capture.height, "Colour Space\n1\n\nConversion:\nRGB to CMY", 4);
-    hoverEffect(positions[3][2].x, positions[3][2].y, capture.width, capture.height, "Colour Space\n2\n\nConversion:\nRGB to HSV", 4);
-    hoverEffect(positions[4][0].x, positions[4][0].y, capture.width, capture.height, "Face Detection\n\nand\n\nReplaced\nFace Images", 5);
-    hoverEffect(positions[4][1].x, positions[4][1].y, capture.width, capture.height, "Threshold\nImage\n\nfrom\nColour Space\n1", 5);
-    hoverEffect(positions[4][2].x, positions[4][2].y, capture.width, capture.height, "Threshold\nImage\n\nfrom\nColour Space\n2", 5);
+  for (let i = 0; i < buttonsAndSliders.length; i++) {
+    if (exportingNow) buttonsAndSliders[i].hide();
+    else {
+      buttonsAndSliders[i].show();
+      if (!showUnfreezeButton) unfreezeButton.hide();
+    }
   }
 }
 
@@ -383,35 +274,320 @@ function keyPressed() {
   }
 }
 
-// General helper functions
-function hoverEffect(x, y, w, h, string, linebreakCount) {
-  // Effect
-  if (
-    // format
-    mouseX > x &&
-    mouseX < x + w &&
-    mouseY > y &&
-    mouseY < y + h
-  ) {
-    fill(0, 200);
-    rect(x, y, w, h);
-    fill(255); // Reset to default
-  } else {
-    string = "";
-  }
-
-  /*
-  NOTE
-  if 0  line break, then "+ textSize() / 2"
-  if >0 line break, then "- (textSize() * linebreakCount) / 2"
-  */
-
-  // Text
-  let midX = x + w / 2;
-  let midY;
-  linebreakCount == 0 ? (midY = y + h / 2 + textSize() / 2) : (midY = y + h / 2 - (textSize() * linebreakCount) / 2);
-  text(string, midX, midY);
+// setup() functions
+function setupTopRightCornerItems() {
+  setupExportItems();
+  setupHoverToggleButton();
+  setupInputFeedButtons();
 }
+
+function setupExportItems() {
+  exportButton = createButton("Export Canvas");
+  buttons.push(exportButton);
+
+  exportButton.mousePressed(function () {
+    exportDelay = exportDelaySlider.value() * 1000; // 1000 = 1 second
+    exportingNow = true;
+    setTimeout(function () {
+      saveCanvas("My p5.js Photo Booth", "png");
+      exportingNow = false;
+    }, exportDelay);
+  });
+
+  exportDelaySlider = createSlider(0, 10, 3, 1);
+  sliders.push(exportDelaySlider);
+}
+
+function setupHoverToggleButton() {
+  hoverToggleButton = createButton("Toggle Cursor Hover<br>On"); // Use "<br>" instead of "\n"
+  buttons.push(hoverToggleButton);
+
+  hoverToggleButton.mousePressed(function () {
+    hoverEffectIsOn = !hoverEffectIsOn;
+    if (hoverEffectIsOn) hoverToggleButton.html("Toggle Cursor Hover<br>On");
+    else hoverToggleButton.html("Toggle Cursor Hover<br>Off");
+  });
+}
+
+function setupInputFeedButtons() {
+  freezeButton = createButton("Freeze frame");
+  unfreezeButton = createButton("Unfreeze frame").hide();
+  switchToImageButton = createButton("Switch to<br>Preloaded Image");
+  buttons.push(
+    // Format
+    freezeButton,
+    unfreezeButton,
+    switchToImageButton
+  );
+
+  freezeButton.mousePressed(function () {
+    let picture = createImage(capture.width, capture.height);
+    picture.copy(capture, 0, 0, capture.width, capture.height, 0, 0, capture.width, capture.height);
+    inputFeed = picture;
+    freezeButton.html("Freeze again!");
+    showUnfreezeButton = true;
+  });
+
+  unfreezeButton.mousePressed(function () {
+    inputFeed = capture;
+    freezeButton.html("Freeze frame");
+    showUnfreezeButton = false;
+  });
+
+  switchToImageButton.mousePressed(function () {
+    let myImageCopy = createImage(capture.width, capture.height);
+    myImageCopy.copy(myImage, 0, 0, myImage.width, myImage.height, 0, 0, capture.width, capture.height);
+    inputFeed = myImageCopy;
+    showUnfreezeButton = true;
+  });
+}
+
+function setupCaptureGridButtons() {
+  setupThresholdButtons();
+  setupFaceDetectButtons();
+}
+
+function setupThresholdButtons() {
+  thresholdToggleBlackButton = createButton("See Pure Black<br>On"); // Use "<br>" instead of "\n"
+  thresholdToggleWhiteButton = createButton("Threshold to White<br>Off"); // Use "<br>" instead of "\n"
+  buttons.push(
+    // Format
+    thresholdToggleBlackButton,
+    thresholdToggleWhiteButton
+  );
+
+  thresholdToggleBlackButton.mousePressed(function () {
+    thresholdShowPureBlack = !thresholdShowPureBlack;
+    if (thresholdShowPureBlack) thresholdToggleBlackButton.html("See Pure Black<br>On");
+    else thresholdToggleBlackButton.html("See Pure Black<br>Off");
+  });
+
+  thresholdToggleWhiteButton.mousePressed(function () {
+    thresholdToWhite = !thresholdToWhite;
+    if (thresholdToWhite) thresholdToggleWhiteButton.html("Threshold to White<br>On");
+    else thresholdToggleWhiteButton.html("Threshold to White<br>Off");
+  });
+}
+
+function setupFaceDetectButtons() {
+  detectDefaultButton = createButton("Default");
+  detectGreyButton = createButton("Greyscale");
+  detectBlurButton = createButton("Blur");
+  detectConvertButton = createButton("HSV Mode");
+  detectPixelButton = createButton("Pixelate");
+  detectNegativeButton = createButton("Negative");
+  buttons.push(
+    // Format
+    detectDefaultButton,
+    detectGreyButton,
+    detectBlurButton,
+    detectConvertButton,
+    detectPixelButton,
+    detectNegativeButton
+  );
+
+  detectDefaultButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectDefaultEffect = true;
+  });
+
+  detectGreyButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectGreyEffect = true;
+  });
+
+  detectBlurButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectBlurEffect = true;
+  });
+
+  detectConvertButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectConvertEffect = true;
+  });
+
+  detectPixelButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectPixelEffect = true;
+  });
+
+  detectNegativeButton.mousePressed(function () {
+    setAllEffectsFalse();
+    detectNegativeEffect = true;
+  });
+}
+
+function setupCaptureGridSliders() {
+  // Non-face detection
+  brightSlider = createSlider(0, 300, 120, 1);
+  redSlider = createSlider(0, 255, 255, 1);
+  greenSlider = createSlider(0, 255, 255, 1);
+  blueSlider = createSlider(0, 255, 255, 1);
+  redThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
+  greenThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
+  blueThresholdSlider = createSlider(0, 255, 85, 1); // 85 = (1 / 3) of 255
+  cyanSlider = createSlider(0, 100, 100, 1);
+  magentaSlider = createSlider(0, 100, 100, 1);
+  yellowSlider = createSlider(0, 100, 100, 1);
+  hueSlider = createSlider(0, 360, 360, 1);
+  satSlider = createSlider(0, 100, 100, 1);
+  valSlider = createSlider(0, 100, 100, 1);
+  cyanThresholdSlider = createSlider(0, 100, 66, 1);
+  hueThresholdSlider = createSlider(0, 360, 180, 1);
+  sliders.push(
+    // Format
+    brightSlider,
+    redSlider,
+    greenSlider,
+    blueSlider,
+    redThresholdSlider,
+    greenThresholdSlider,
+    blueThresholdSlider,
+    cyanSlider,
+    magentaSlider,
+    yellowSlider,
+    hueSlider,
+    satSlider,
+    valSlider,
+    cyanThresholdSlider,
+    hueThresholdSlider
+  );
+
+  // Face detection
+  detectDefaultSlider = createSlider(1, 10, 2, 1);
+  detectBlurSlider = createSlider(1, 30, 15, 1);
+  detectPixelSlider = createSlider(1, 20, 10, 1);
+  sliders.push(
+    // Format
+    detectDefaultSlider,
+    detectBlurSlider,
+    detectPixelSlider
+  );
+}
+
+// draw() functions
+function getCaptureGridPosition() {
+  let rowCount = 5;
+  let colCount = 3;
+
+  for (let i = 0; i < rowCount; i++) {
+    positions[i] = [];
+
+    for (let j = 0; j < colCount; j++) {
+      let totalWidth = colCount * (setWidth + marginWidth) - marginWidth;
+      let extraHeight = exportingNow ? 0 : (detectDefaultSlider.height + detectDefaultSlider.height / 8) * 3; // This is the extra height taken up below captureEditFaceDetect()
+      let totalHeight = rowCount * (setHeight + marginHeight) - marginHeight + extraHeight;
+      let startX = (width - totalWidth) / 2;
+      let startY = (height - totalHeight) / 2;
+
+      positions[i][j] = {
+        x: startX + j * (setWidth + marginWidth),
+        y: startY + i * (setHeight + marginHeight),
+      };
+    }
+  }
+}
+
+function drawTopRightCornerItems() {
+  exportButton.position(positions[0][2].x, positions[0][2].y);
+  textAndSliderBottomLeft(exportDelaySlider, inputFeed.width * 0.45, exportButton.x, exportButton.y - inputFeed.height + exportButton.height + buttonMargin, "Export delay\n", " sec");
+
+  hoverToggleButton.position(exportButton.x, exportDelaySlider.y + buttonMargin * 3.5);
+
+  switchToImageButton.position(hoverToggleButton.x + hoverToggleButton.width + buttonMargin, hoverToggleButton.y);
+  freezeButton.position(exportButton.x, hoverToggleButton.y + hoverToggleButton.height + buttonMargin);
+  unfreezeButton.position(exportButton.x + freezeButton.width + buttonMargin, hoverToggleButton.y + hoverToggleButton.height + buttonMargin);
+}
+
+function drawCaptureGrid() {
+  // Row 1
+  image(inputFeed, positions[0][0].x, positions[0][0].y, setWidth, setHeight);
+  captureEditGrey(inputFeed, positions[0][1].x, positions[0][1].y, setWidth, setHeight);
+
+  // Row 2
+  captureEditR(inputFeed, positions[1][0].x, positions[1][0].y, setWidth, setHeight);
+  captureEditG(inputFeed, positions[1][1].x, positions[1][1].y, setWidth, setHeight);
+  captureEditB(inputFeed, positions[1][2].x, positions[1][2].y, setWidth, setHeight);
+
+  // Row 3
+  captureEditThresholdR(inputFeed, positions[2][0].x, positions[2][0].y, setWidth, setHeight);
+  captureEditThresholdG(inputFeed, positions[2][1].x, positions[2][1].y, setWidth, setHeight);
+  captureEditThresholdB(inputFeed, positions[2][2].x, positions[2][2].y, setWidth, setHeight);
+
+  // Row 4
+  captureEditRepeat(inputFeed, positions[3][0].x, positions[3][0].y, setWidth, setHeight);
+  captureEditColourSpace1(inputFeed, positions[3][1].x, positions[3][1].y, setWidth, setHeight);
+  captureEditColourSpace2(inputFeed, positions[3][2].x, positions[3][2].y, setWidth, setHeight);
+
+  // Row 5
+  captureEditFaceDetect(inputFeed, positions[4][0].x, positions[4][0].y, setWidth, setHeight);
+  captureEditColourSpace1Threshold(inputFeed, positions[4][1].x, positions[4][1].y, setWidth, setHeight);
+  captureEditColourSpace2Threshold(inputFeed, positions[4][2].x, positions[4][2].y, setWidth, setHeight);
+}
+
+function drawCaptureGridItems() {
+  // Row 1
+  textAndSliderBottomCenter(brightSlider, positions[0][1].x, positions[0][1].y, "Brightness: ", "%");
+
+  // Row 2
+  textAndSliderBottomCenter(redSlider, positions[1][0].x, positions[1][0].y, "Red Value: ");
+  textAndSliderBottomCenter(greenSlider, positions[1][1].x, positions[1][1].y, "Green Value: ");
+  textAndSliderBottomCenter(blueSlider, positions[1][2].x, positions[1][2].y, "Blue Value: ");
+
+  // Row 3
+  thresholdToggleBlackButton.position(positions[2][0].x - thresholdToggleBlackButton.width - buttonMargin, positions[2][0].y);
+  thresholdToggleWhiteButton.position(positions[2][0].x - thresholdToggleWhiteButton.width - buttonMargin, positions[2][0].y + thresholdToggleBlackButton.height + buttonMargin);
+  textAndSliderBottomCenter(redThresholdSlider, positions[2][0].x, positions[2][0].y, "Red Threshold: ");
+  textAndSliderBottomCenter(greenThresholdSlider, positions[2][1].x, positions[2][1].y, "Green Threshold: ");
+  textAndSliderBottomCenter(blueThresholdSlider, positions[2][2].x, positions[2][2].y, "Blue Threshold: ");
+
+  // Row 4
+  textAndSliderBottomLeft(cyanSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y, "Cyan: ", "%");
+  textAndSliderBottomLeft(magentaSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y + cyanSlider.height * 1.2, "Magenta: ", "%");
+  textAndSliderBottomLeft(yellowSlider, inputFeed.width * 0.55, positions[3][1].x, positions[3][1].y + cyanSlider.height * 1.2 + magentaSlider.height * 1.2, "Yellow: ", "%");
+  textAndSliderBottomLeft(hueSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y, "Hue: ", "°");
+  textAndSliderBottomLeft(satSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y + hueSlider.height * 1.2, "Sat.: ", "%");
+  textAndSliderBottomLeft(valSlider, inputFeed.width * 0.45, positions[3][2].x, positions[3][2].y + hueSlider.height * 1.2 + satSlider.height * 1.2, "Value: ", "%");
+
+  // Row 5, left capture's left side
+  for (let i = 0; i < 6; i++) {
+    text(i + 1, positions[4][0].x - marginWidth, positions[4][0].y + buttonMargin * 1.5 + i * (detectDefaultButton.height + buttonMargin));
+  }
+  detectDefaultButton.position(positions[4][0].x - detectDefaultButton.width - buttonMargin * 2.5, positions[4][0].y);
+  detectGreyButton.position(positions[4][0].x - detectGreyButton.width - buttonMargin * 2.5, detectDefaultButton.y + detectDefaultButton.height + buttonMargin);
+  detectBlurButton.position(positions[4][0].x - detectBlurButton.width - buttonMargin * 2.5, detectGreyButton.y + detectGreyButton.height + buttonMargin);
+  detectConvertButton.position(positions[4][0].x - detectConvertButton.width - buttonMargin * 2.5, detectBlurButton.y + detectBlurButton.height + buttonMargin);
+  detectPixelButton.position(positions[4][0].x - detectPixelButton.width - buttonMargin * 2.5, detectConvertButton.y + detectConvertButton.height + buttonMargin);
+  detectNegativeButton.position(positions[4][0].x - detectNegativeButton.width - buttonMargin * 2.5, detectPixelButton.y + detectPixelButton.height + buttonMargin);
+
+  // Row 5, left capture's bottom side
+  textAndSliderBottomLeft(detectDefaultSlider, inputFeed.width * 0.7, positions[4][0].x, positions[4][0].y, "Box thickness: ", "px");
+  textAndSliderBottomLeft(detectBlurSlider, inputFeed.width * 0.4, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 1.2, "Blur: ", "x");
+  textAndSliderBottomLeft(detectPixelSlider, inputFeed.width * 0.4, positions[4][0].x, positions[4][0].y + detectDefaultSlider.height * 1.2 + detectBlurSlider.height * 1.2, "Pixel: ", "px");
+
+  // Row 5, middle and right capture
+  textAndSliderBottomCenter(cyanThresholdSlider, positions[4][1].x, positions[4][1].y, "C Threshold: ", "%");
+  textAndSliderBottomCenter(hueThresholdSlider, positions[4][2].x, positions[4][2].y, "H Threshold: ", "%");
+}
+
+function drawCaptureGridHoverEffect() {
+  hoverEffect(positions[0][0].x, positions[0][0].y, capture.width, capture.height, "Webcam\nImage", 1);
+  hoverEffect(positions[0][1].x, positions[0][1].y, capture.width, capture.height, "Greyscale\nand\nBrightness at " + brightSlider.value() + "%", 2);
+  hoverEffect(positions[1][0].x, positions[1][0].y, capture.width, capture.height, "Red Channel", 0);
+  hoverEffect(positions[1][1].x, positions[1][1].y, capture.width, capture.height, "Green Channel", 0);
+  hoverEffect(positions[1][2].x, positions[1][2].y, capture.width, capture.height, "Blue Channel", 0);
+  hoverEffect(positions[2][0].x, positions[2][0].y, capture.width, capture.height, "Threshold\nImage", 1);
+  hoverEffect(positions[2][1].x, positions[2][1].y, capture.width, capture.height, "Threshold\nImage", 1);
+  hoverEffect(positions[2][2].x, positions[2][2].y, capture.width, capture.height, "Threshold\nImage", 1);
+  hoverEffect(positions[3][0].x, positions[3][0].y, capture.width, capture.height, "Webcam\nImage\n\n(Repeat)", 3);
+  hoverEffect(positions[3][1].x, positions[3][1].y, capture.width, capture.height, "Colour Space\n1\n\nConversion:\nRGB to CMY", 4);
+  hoverEffect(positions[3][2].x, positions[3][2].y, capture.width, capture.height, "Colour Space\n2\n\nConversion:\nRGB to HSV", 4);
+  hoverEffect(positions[4][0].x, positions[4][0].y, capture.width, capture.height, "Face Detection\n\nand\n\nReplaced\nFace Images", 5);
+  hoverEffect(positions[4][1].x, positions[4][1].y, capture.width, capture.height, "Threshold\nImage\n\nfrom\nColour Space\n1", 5);
+  hoverEffect(positions[4][2].x, positions[4][2].y, capture.width, capture.height, "Threshold\nImage\n\nfrom\nColour Space\n2", 5);
+}
+
+// ----- Helper functions ----- //
 
 function textAndSliderBottomCenter(incomingSlider, inputFeedX, inputFeedY, string, stringSuffix = "") {
   // This is so that it exports without text showing
@@ -419,7 +595,7 @@ function textAndSliderBottomCenter(incomingSlider, inputFeedX, inputFeedY, strin
 
   // Text (based on inputFeed's dimensions and incomingSlider's height only)
   text(
-    // format
+    // Format
     string + incomingSlider.value() + stringSuffix,
     inputFeedX + inputFeed.width / 2,
     inputFeedY + inputFeed.height + incomingSlider.height
@@ -427,7 +603,7 @@ function textAndSliderBottomCenter(incomingSlider, inputFeedX, inputFeedY, strin
 
   // Slider (based on inputFeed's dimensions and incomingSlider's height only)
   incomingSlider.position(
-    // format
+    // Format
     inputFeedX,
     inputFeedY + inputFeed.height + incomingSlider.height
   );
@@ -443,7 +619,7 @@ function textAndSliderBottomLeft(incomingSlider, emptySpaceWidth, inputFeedX, in
   // Text (based on inputFeed's dimensions and incomingSlider's height only)
   textAlign(LEFT);
   text(
-    // format
+    // Format
     string + incomingSlider.value() + stringSuffix,
     inputFeedX,
     hasLineBreak ? inputFeedY + inputFeed.height + incomingSlider.height - textSize() / 2 : inputFeedY + inputFeed.height + incomingSlider.height
@@ -452,11 +628,37 @@ function textAndSliderBottomLeft(incomingSlider, emptySpaceWidth, inputFeedX, in
 
   // Slider (based on inputFeed's dimensions)
   incomingSlider.position(
-    // format
+    // Format
     inputFeedX + emptySpaceWidth,
     inputFeedY + inputFeed.height + incomingSlider.height / 8 // "+ incomingSlider.height / 8" to move it down very slightly
   );
   incomingSlider.style("width", inputFeed.width - emptySpaceWidth + "px");
+}
+
+function hoverEffect(x, y, w, h, string, linebreakCount) {
+  // Effect
+  if (
+    // Format
+    mouseX > x &&
+    mouseX < x + w &&
+    mouseY > y &&
+    mouseY < y + h
+  ) {
+    fill(0, 200);
+    rect(x, y, w, h);
+    fill(255); // Reset to default
+  } else {
+    string = "";
+  }
+
+  // If 0  line break, then "+ textSize() / 2"
+  // If >0 line break, then "- (textSize() * linebreakCount) / 2"
+
+  // Text
+  let midX = x + w / 2;
+  let midY;
+  linebreakCount == 0 ? (midY = y + h / 2 + textSize() / 2) : (midY = y + h / 2 - (textSize() * linebreakCount) / 2);
+  text(string, midX, midY);
 }
 
 function setAllEffectsFalse() {
@@ -468,12 +670,7 @@ function setAllEffectsFalse() {
   detectNegativeEffect = false;
 }
 
-/*
-NOTE
-'capture' is at position (0, 0)
-image(x, y, w, h) "artificially" moves the capture to position (x, y)
-thus, have to copy from (0, 0) to (0, 0), then "artificially" move the copy using image()
-*/
+// ----- Capture grid functions --- //
 
 // Row 1
 function captureEditGrey(src, x, y, w, h) {
@@ -617,7 +814,7 @@ function captureEditThresholdB(src, x, y, w, h) {
   image(captureCopy, x, y, w, h);
 }
 
-// Row 3 helper function
+// Row 3's helper function
 function createThresholdForRGB(slider, chanFocused, chanSide1, chanSide2) {
   if (chanFocused > slider.value()) {
     chanFocused = 255;
@@ -671,7 +868,7 @@ function captureEditColourSpace2(src, x, y, w, h) {
   image(captureCopy, x, y, w, h);
 }
 
-// Row 4 helper function
+// Row 4's (and 5's) helper function
 function fromRGBtoCMY(isRow4, src, currentIndex, incomingR, incomingG, incomingB) {
   /*
   Useful links
@@ -722,9 +919,9 @@ function fromRGBtoHSV(isRow4, src, currentIndex, incomingR, incomingG, incomingB
 
   // Hue
   let myHue;
-  if (myValMax == incomingR) myHue = 60 * ((0 + (incomingG - incomingB)) / (myValMax - myValMin));
-  if (myValMax == incomingG) myHue = 60 * ((2 + (incomingB - incomingR)) / (myValMax - myValMin));
-  if (myValMax == incomingB) myHue = 60 * ((4 + (incomingR - incomingG)) / (myValMax - myValMin));
+  if (myValMax == incomingR) myHue = 60 * (0 + (incomingG - incomingB) / (myValMax - myValMin));
+  if (myValMax == incomingG) myHue = 60 * (2 + (incomingB - incomingR) / (myValMax - myValMin));
+  if (myValMax == incomingB) myHue = 60 * (4 + (incomingR - incomingG) / (myValMax - myValMin));
   if (myHue < 0) myHue += 360;
 
   // Change output and reset range back to 0~255
@@ -799,7 +996,7 @@ function captureEditColourSpace2Threshold(src, x, y, w, h) {
   image(captureCopy, x, y, w, h);
 }
 
-// Row 5 helper functions
+// Row 5's helper functions
 function faceDetectEdit(src, faceX, faceY, faceWidth, faceHeight, translateX, translateY) {
   for (let x = faceX; x < faceX + faceWidth; x++) {
     for (let y = faceY; y < faceY + faceHeight; y++) {
